@@ -30,73 +30,75 @@ This project aims to predict the number of deaths due to COVID-19 using a Long S
 ## Program
 ```.py
 import pandas as pd
-from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
 import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
 from keras.models import Sequential
+from sklearn.preprocessing import LabelEncoder
 from keras.layers import LSTM, Dense, Dropout
-from keras.callbacks import EarlyStopping
-import matplotlib.pyplot as plt
 
-# Load the training data
-df = pd.read_csv("train_data_covid.csv")
+# Assuming the data is loaded in a pandas dataframe called 'df'
+df=pd.read_csv("train_data_covid.csv")
+df.replace('-', 0)
 
-# Replace '-' with 0
-df.replace('-', 0, inplace=True)
-
-# Handle missing values by filling with the value from the previous day
+# Handle missing value (replace with next day for demonstration)
 df.fillna(method='ffill', inplace=True)
 
-# Convert 'Date' column to datetime format
+# Create separate Date and Time columns (corrected format)
 df['Date'] = pd.to_datetime(df['Date'], format='%Y-%m-%d')
-
-# Extract 'Time' from 'Date'
 df['Time'] = df['Date'].dt.time
 
-# Extract day of the week from 'Date'
+# Extract day of week
 df['Day_of_Week'] = df['Date'].dt.weekday
 
-# Calculate daily increase in confirmed cases
+# Calculate daily increase in confirmed cases (assuming 'Confirmed' is cases)
 df['Daily_Increase_Confirmed'] = df['Confirmed'].diff()
 
-# Calculate daily deaths
+# Create target variable (assuming 'Deaths' is cumulative)
 df['Daily_Deaths'] = df['Deaths'].diff()
 
-# Encode categorical features using LabelEncoder
+# Create a LabelEncoder object
 le = LabelEncoder()
-combine = pd.concat([df, test_df], axis=0)
+# combine the test and train data
+test_df=pd.read_csv("test_data_covid.csv")
+combine = pd.concat([df,test_df],axis=0)
+
+#fit the encoder
 le.fit(combine["State/UnionTerritory"])
+
+# Encode the "State/UnionTerritory" column
 df["State/UnionTerritory_Encoded"] = le.transform(df["State/UnionTerritory"])
 
-# Select relevant features
-features = ['Confirmed', 'Daily_Increase_Confirmed', 'PopulationDensityPerSqKm', "State/UnionTerritory_Encoded"]
+# Select relevant features (replace with your choices)
+features = ['Confirmed', 'Daily_Increase_Confirmed', 'PopulationDensityPerSqKm',"State/UnionTerritory_Encoded"]
 
-# Feature scaling
+# Feature scaling (assuming StandardScaler is suitable)
 scaler = StandardScaler()
 df[features] = scaler.fit_transform(df[features])
-
-# Define target variable
 target = 'Deaths'
 
-# Drop rows with NaN values resulting from diff() operation
+# Drop rows with NaN values (resulting from diff() operation)
 df = df.dropna()
 
 # Split data into input (X) and output (y) sequences
 X = df[features].values
 y = df[target].values
+
+# Reshape input data for LSTM (samples, time steps, features)
 X = X.reshape(X.shape[0], 1, X.shape[1])
 
-# Split data into training and testing sets
+# Split data into training and testing sets (80% train, 20% test)
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1)
 
-# Concatenate test data to train data
-X_train = np.concatenate((X_train, X_test), axis=0)
-y_train = np.concatenate((y_train, y_test), axis=0)
+# add test to the train data
+X_train = np.concatenate((X_train,X_test),axis=0)
+y_train = np.concatenate((y_train,y_test),axis=0)
 
-# Define LSTM model architecture
+
+# Define larger and deeper LSTM model architecture
 model = Sequential([
     LSTM(units=1024, return_sequences=True, input_shape=(X_train.shape[1], X_train.shape[2])),
-    Dropout(0.3),
+    Dropout(0.3), # Dropout layer to prevent overfitting
     LSTM(units=512, return_sequences=True),
     Dropout(0.3),
     LSTM(units=512, return_sequences=True),
@@ -105,17 +107,18 @@ model = Sequential([
     Dropout(0.3),
     Dense(units=256, activation='relu'),
     Dense(units=256, activation='relu'),
-    Dense(units=128, activation='relu'),
+    Dense(units=128, activation='relu'), 
     Dense(units=128, activation='relu'),
     Dense(units=64, activation='relu'),
-    Dense(units=64, activation='relu'),
-    Dense(units=1)
+    Dense(units=64, activation='relu'),  
+    Dense(units=1)  # Output layer
 ])
 
 # Compile model
 model.compile(optimizer='adam', loss='mae')
 
-# Define early stopping to prevent overfitting
+# early stopping
+from keras.callbacks import EarlyStopping
 early_stopping = EarlyStopping(monitor='val_loss', patience=50, restore_best_weights=True, verbose=1)
 
 # Fit model
@@ -125,50 +128,32 @@ history = model.fit(X_train, y_train, epochs=1000, batch_size=128, validation_sp
 loss = model.evaluate(X_test, y_test)
 print("Test Loss:", loss)
 
-# Load test data
-test_data = pd.read_csv("test_data_covid.csv")
-
-# Handle missing values in test data
+test_data=pd.read_csv("test_data_covid.csv")
 test_data.fillna(method='ffill', inplace=True)
-
-# Convert 'Date' to datetime format
 test_data['Date'] = pd.to_datetime(test_data['Date'], format='%Y-%m-%d')
-
-# Extract 'Time' from 'Date'
 test_data['Time'] = test_data['Date'].dt.time
-
-# Extract day of the week from 'Date'
 test_data['Day_of_Week'] = test_data['Date'].dt.weekday
-
-# Calculate daily increase in confirmed cases
 test_data['Daily_Increase_Confirmed'] = test_data['Confirmed'].diff()
-
-# Encode categorical features using LabelEncoder
 test_data["State/UnionTerritory_Encoded"] = le.transform(test_data["State/UnionTerritory"])
-
-# Feature scaling for test data
 test_data[features] = scaler.transform(test_data[features])
-
-# Prepare test data for prediction
 X_new = test_data[features].values
 X_new = X_new.reshape(X_new.shape[0], 1, X_new.shape[1])
-
-# Predict using the trained model
 y_new = model.predict(X_new)
-y_new = y_new.astype(int)
+y_new=y_new.astype(int)
+y_new
 
-# Convert predictions to one-dimensional array
+# convert to one dimensional array
 y_new = y_new.ravel()
 
-# Save predictions to CSV with 'Sno' from test_data_covid.csv
+# save to csv with Sno from test_data_covid.csv
 output = pd.DataFrame({'Sno': test_data['Sno'], 'Deaths': y_new})
 
-# Replace negative values with 0
+# replace all negative values with 0
 output['Deaths'] = output['Deaths'].clip(lower=0)
-
-# Save predictions to CSV file
+display(output)
 output.to_csv('submissions/test.csv', index=False)
 
+import matplotlib.pyplot as plt
 # Plot training and validation loss
 plt.plot(history.history['loss'], label='Training Loss')
 plt.plot(history.history['val_loss'], label='Validation Loss')
