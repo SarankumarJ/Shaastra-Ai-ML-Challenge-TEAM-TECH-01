@@ -13,7 +13,7 @@ This project aims to predict the number of deaths due to COVID-19 using a Long S
 - matplotlib
 
 ## Installation
-1. Clone this repository: `git clone https://github.com/your_username/covid-lstm-model.git`
+1. Clone this repository: `git clone https://github.com/SarankumarJ/Shaastra-Ai-ML-Challenge-TEAM-TECH-01.git`
 2. Install dependencies: `pip install -r requirements.txt`
 
 ## Usage
